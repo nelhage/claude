@@ -20,6 +20,9 @@ type Response struct {
 	Model      string `json:"model"`
 }
 type Error struct {
+	Details ErrorDetails `json:"error"`
+}
+type ErrorDetails struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
 }
@@ -126,7 +129,7 @@ func doClaude() error {
 			if err := json.Unmarshal([]byte(event.Data), &msg); err != nil {
 				return fmt.Errorf("parse %q: %w", event.Data, err)
 			}
-			fmt.Fprintf(os.Stderr, "Error code=%s: %q", msg.Type, msg.Message)
+			fmt.Fprintf(os.Stderr, "Error code=%s: %q", msg.Details.Type, msg.Details.Message)
 		}
 	}
 	fmt.Println("")
