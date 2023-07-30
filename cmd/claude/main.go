@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 
+	"github.com/alevinval/sse/pkg/decoder"
 	"github.com/bgentry/go-netrc/netrc"
 )
 
@@ -16,6 +18,10 @@ type Response struct {
 	Completion string `json:"completion"`
 	StopReason string `json:"stop_reason"`
 	Model      string `json:"model"`
+}
+type Error struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
 }
 
 func formatPrompt(prompt string) string {
@@ -59,6 +65,7 @@ func doClaude() error {
 		"model":                model,
 		"prompt":               prompt,
 		"max_tokens_to_sample": max_tokens,
+		"stream":               true,
 	}
 
 	if temperature >= 0 {
@@ -89,12 +96,40 @@ func doClaude() error {
 	}
 	defer resp.Body.Close()
 
-	var reply Response
-	if err := json.NewDecoder(resp.Body).Decode(&reply); err != nil {
-		return fmt.Errorf("decode: %w", err)
-	}
+	/*
+		var reply Response
+		if err := json.NewDecoder(resp.Body).Decode(&reply); err != nil {
+			return fmt.Errorf("decode: %w", err)
+		}
 
-	fmt.Printf("%s\n", reply.Completion)
+		fmt.Printf("%s\n", reply.Completion)
+	*/
+	events := decoder.New(resp.Body)
+	for {
+		event, err := events.Decode()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			return fmt.Errorf("decoding: %w", err)
+		}
+
+		switch event.Name {
+		case "completion":
+			var msg Response
+			if err := json.Unmarshal([]byte(event.Data), &msg); err != nil {
+				return fmt.Errorf("parse %q: %w", event.Data, err)
+			}
+			fmt.Print(msg.Completion)
+		case "error":
+			var msg Error
+			if err := json.Unmarshal([]byte(event.Data), &msg); err != nil {
+				return fmt.Errorf("parse %q: %w", event.Data, err)
+			}
+			fmt.Fprintf(os.Stderr, "Error code=%s: %q", msg.Type, msg.Message)
+		}
+	}
+	fmt.Println("")
 
 	return nil
 }
