@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/alevinval/sse/pkg/decoder"
 	"github.com/bgentry/go-netrc/netrc"
@@ -107,6 +108,7 @@ func doClaude() error {
 
 		fmt.Printf("%s\n", reply.Completion)
 	*/
+	first := true
 	events := decoder.New(resp.Body)
 	for {
 		event, err := events.Decode()
@@ -123,7 +125,12 @@ func doClaude() error {
 			if err := json.Unmarshal([]byte(event.Data), &msg); err != nil {
 				return fmt.Errorf("parse %q: %w", event.Data, err)
 			}
-			fmt.Print(msg.Completion)
+			tok := msg.Completion
+			if first {
+				tok = strings.TrimPrefix(tok, " ")
+				first = false
+			}
+			fmt.Print(tok)
 		case "error":
 			var msg Error
 			if err := json.Unmarshal([]byte(event.Data), &msg); err != nil {
