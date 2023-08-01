@@ -1,4 +1,4 @@
-module nelhage.com/claude-cli
+module github.com/nelhage/claude
 
 go 1.20
 
