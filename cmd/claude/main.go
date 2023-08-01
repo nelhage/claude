@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -28,8 +29,8 @@ type ErrorDetails struct {
 	Message string `json:"message"`
 }
 
-func formatPrompt(prompt string) string {
-	return fmt.Sprintf("\n\nHuman: %s\n\nAssistant:", prompt)
+func formatPrompt(system string, prompt string) string {
+	return fmt.Sprintf("%s\n\nHuman: %s\n\nAssistant:", system, prompt)
 }
 
 func doClaude() error {
@@ -38,14 +39,20 @@ func doClaude() error {
 	var temperature float64
 	var top_p float64
 	var raw bool
+	var system string
 
 	flag.StringVar(&model, "model", "claude-2", "model name")
+	flag.StringVar(&system, "system", "", "System prompt (prefix)")
 	flag.IntVar(&max_tokens, "max-tokens", 256, "max tokens to sample")
 	flag.Float64Var(&temperature, "temperature", -1.0, "sample temperature")
 	flag.Float64Var(&top_p, "top-p", -1.0, "sample top-p")
 	flag.BoolVar(&raw, "raw", false, "Do not format prompt in Human/Assistant format")
 
 	flag.Parse()
+
+	if raw && system != "" {
+		return fmt.Errorf("--system will be ignored when used with --raw!")
+	}
 
 	rc, err := netrc.ParseFile(os.ExpandEnv("$HOME/.netrc"))
 	if err != nil {
@@ -57,12 +64,19 @@ func doClaude() error {
 	}
 	key := m.Password
 	prompt := flag.Arg(0)
+	if prompt == "-" {
+		stdin, err := ioutil.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("read stdin: %w", err)
+		}
+		prompt = string(stdin)
+	}
 	if prompt == "" {
 		return fmt.Errorf("No prompt given")
 	}
 
 	if !raw {
-		prompt = formatPrompt(prompt)
+		prompt = formatPrompt(system, prompt)
 	}
 
 	reqParams := map[string]interface{}{
